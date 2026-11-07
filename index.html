@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>منبّه المحطة</title>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#0d1520"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d1520;--card:#162233;--line:#243449;--tx:#e6edf5;--mut:#8ea3ba;--ok:#2ecc8f;--warn:#f5b942;--bad:#ff5d6c;--acc:#38bdf8;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:Cairo,Tajawal,sans-serif;line-height:1.6}
+.wrap{max-width:900px;margin:auto;padding:14px}
+h1{font-size:22px;margin:0}.sub{color:var(--mut);font-size:13px}
+.top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tabs button{flex:1;background:var(--card);color:var(--mut);border:1px solid var(--line);border-radius:10px;padding:9px;font:600 15px Cairo,sans-serif;cursor:pointer}
+.tabs button.on{background:var(--acc);color:#04202e;border-color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;border-right:6px solid var(--line)}
+.card.new{border-right-color:var(--acc)}.card.warn{border-right-color:var(--warn)}.card.bad{border-right-color:var(--bad);animation:p 1.2s infinite}.card.ok{border-right-color:var(--ok)}
+@keyframes p{50%{background:#2a1a24}}
+.card h2{font-size:17px;margin:0 0 4px}.msg{color:var(--mut);margin-bottom:8px}
+.badge{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:1px 8px;margin-right:6px}
+.badge.new{background:#0c4a63;color:var(--acc)}.badge.warn{background:#4a3a0c;color:var(--warn)}.badge.bad{background:#5a1a22;color:var(--bad)}.badge.ok{background:#0e4a35;color:var(--ok)}
+.steps{display:flex;gap:14px;font-size:12px;color:var(--mut);margin-bottom:8px;flex-wrap:wrap}
+input,textarea,select{background:#0b121c;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:8px;font:15px Cairo,sans-serif;max-width:100%}
+.btn{background:var(--acc);color:#04202e;border:0;border-radius:10px;padding:10px 16px;font:700 15px Cairo,sans-serif;cursor:pointer;margin:3px 0 3px 6px}
+.btn.g{background:var(--line);color:var(--tx)}.btn.ok{background:var(--ok)}.btn.r{background:var(--bad);color:#fff}
+.err{color:var(--bad);font-size:13px;min-height:18px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:6px;border-bottom:1px solid var(--line);text-align:center}th{color:var(--mut)}
+.sc{overflow-x:auto}
+.fl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}.fl label{font-size:13px;color:var(--mut)}
+.days label{display:inline-flex;gap:3px;align-items:center;color:var(--tx);font-size:13px}
+.empty{text-align:center;color:var(--mut);padding:30px}
+#pre{position:fixed;top:0;left:0;right:0;z-index:99;padding:env(safe-area-inset-top,0px) 10px 0;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.pb{pointer-events:auto;background:linear-gradient(90deg,#f5b942,#ffcf6b);color:#2a1d00;border-radius:0 0 14px 14px;padding:14px 16px;box-shadow:0 6px 24px #000a;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;max-width:900px;margin:0 auto;width:100%}
+.pb b{font-size:18px}.pb .btn{background:#2a1d00;color:#ffcf6b}
+</style>
+</head>
+<body>
+<div id="pre"></div>
+<div class="wrap">
+<div class="top">
+ <div><h1>🔔 منبّه عمليات المحطة</h1><div class="sub">تنبيه ← تأكيد استلام ← تأكيد تنفيذ • <span id="clock"></span></div></div>
+ <div class="fl"><input id="op" list="ops" placeholder="اسم المُشغّل الحالي" oninput="S.cfg.op=this.value;save()"><datalist id="ops"></datalist>
+ <button class="btn g" id="en" onclick="enable()">🔕 تفعيل الصوت والإشعارات</button></div>
+</div>
+<div class="tabs" id="tabs"></div>
+<div id="view"></div>
+</div>
+<script>
+const K="plantrem_v1",D=["أحد","اثنين","ثلاثاء","أربعاء","خميس","جمعة","سبت"];
+const DEF={tasks:[
+{id:"t1",name:"قياس الكلور الحر",times:["08:00","12:00","16:00","20:00"],days:[0,1,2,3,4,5,6],val:true,msg:"قِس الكلور الحر عند نقطة العينة وسجّل القراءة."},
+{id:"t2",name:"CEB لوحدة UF",times:["06:00","18:00"],days:[0,1,2,3,4,5,6],val:false,msg:"ابدأ CEB على UF Skid بعد التأكد من تحضير الكيماويات."},
+{id:"t3",name:"تحضير الكيماويات",times:["05:30"],days:[0,1,2,3,4,5,6],val:false,msg:"حضّر محاليل الكيماويات المطلوبة لـ CEB والتعقيم."},
+{id:"t4",name:"التعقيم الساخن لـ PW Loop",times:["22:00"],days:[0],val:false,msg:"ابدأ دورة التعقيم الساخن وتأكد من الحرارة والزمن على الـ HMI."}
+],inst:[],cfg:{ackMin:10,doneMin:30,op:"",ops:[]}};
+let S=load(),tab="act",sound=false,ac=null,lastBeep=0,sig="",flash=0;
+function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function load(){let x=null;try{x=JSON.parse(localStorage.getItem(K))}catch(e){}if(!(x&&x.tasks))x=JSON.parse(JSON.stringify(DEF));x.cfg.preMin=x.cfg.preMin??15;x.tasks.forEach(t=>{t.unit=t.unit||"week";t.every=t.every||1;t.start=t.start||iso(new Date());t.dom=t.dom||new Date(t.start+"T00:00").getDate()});return x}
+function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const uid=()=>"i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const ymd=d=>d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
+const fm=t=>t?new Date(t).toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"}):"—";
+const $=id=>document.getElementById(id);
+function st(i){const n=Date.now();if(i.done)return["تم التنفيذ","ok"];if(i.ack)return n-i.ack>S.cfg.doneMin*60000?["متأخر في التنفيذ","bad"]:["قيد التنفيذ","warn"];return n-i.created>S.cfg.ackMin*60000?["لم يُستلم!","bad"]:["جديد – بانتظار الاستلام","new"]}
+function beep(n){try{if(!ac)return;for(let k=0;k<n;k++){const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=880;g.gain.value=.15;o.start(ac.currentTime+k*.35);o.stop(ac.currentTime+k*.35+.2)}}catch(e){}}
+function enable(){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();sound=true;beep(1);$("en").textContent="🔔 الصوت مفعّل"}catch(e){}try{Notification.requestPermission()}catch(e){}wl()}
+function notify(name,msg){try{navigator.vibrate&&navigator.vibrate([400,200,400,200,800])}catch(e){}
+ try{if(Notification.permission!="granted")return;navigator.serviceWorker.ready.then(r=>r.showNotification("🔔 "+name,{body:msg,icon:"icon-192.png",vibrate:[400,200,400,200,800],requireInteraction:true,tag:name+msg})).catch(()=>{try{new Notification("🔔 "+name,{body:msg})}catch(e){}})}catch(e){}}
+function wl(){try{navigator.wakeLock.request("screen")}catch(e){}}
+function preRender(){const now=Date.now(),a=(S.pre||[]).filter(p=>!p.dis&&p.at>now);$("pre").innerHTML=a.map(p=>`<div class="pb"><div><b>⏰ تذكير: بعد ${Math.ceil((p.at-now)/60000)} دقيقة – ${esc(p.name)}</b><div>${esc(p.msg)} (الموعد ${fm(p.at)})</div></div><button class="btn" onclick="dismissPre('${p.key}')">تمام، فهمت</button></div>`).join("")}
+function dismissPre(k){const p=(S.pre||[]).find(x=>x.key==k);if(p){p.dis=Date.now();p.by=S.cfg.op;save();preRender()}}
+function testPre(){const t=S.tasks[0]||{name:"مهمة",msg:""};S.pre=S.pre||[];S.pre.push({key:"test"+Date.now(),name:"(تجربة) "+t.name,msg:t.msg,at:Date.now()+9e5,dis:0});save();preRender();beep(2)}
+function dueOn(t,d){const s=new Date(t.start+"T00:00"),a=new Date(d.getFullYear(),d.getMonth(),d.getDate()),diff=Math.round((a-s)/864e5);if(diff<0)return false;const e=t.every||1;
+ if(t.unit=="day")return diff%e==0;
+ if(t.unit=="week")return t.days.includes(a.getDay())&&Math.floor(diff/7)%e==0;
+ const md=(a.getFullYear()-s.getFullYear())*12+a.getMonth()-s.getMonth();if(md%e)return false;const last=new Date(a.getFullYear(),a.getMonth()+1,0).getDate();return a.getDate()==Math.min(t.dom||s.getDate(),last)}
+function nextDue(t){const n=new Date();for(let i=0;i<800;i++){const d=new Date(n.getFullYear(),n.getMonth(),n.getDate()+i);if(dueOn(t,d))return d.toLocaleDateString("ar-EG",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}return "—"}
+function tick(){const n=new Date(),ds=ymd(n);let ch=false;
+ S.tasks.forEach(t=>{if(!dueOn(t,n))return;t.times.forEach(sl=>{const[h,m]=sl.split(":").map(Number),at=new Date(n.getFullYear(),n.getMonth(),n.getDate(),h,m),d=n-at;
+  if(d>=0&&d<(t.unit=="week"&&t.every==1?72e5:864e5)&&!S.inst.find(i=>i.tid==t.id&&i.date==ds&&i.slot==sl)){S.inst.unshift({id:uid(),tid:t.id,name:t.name,msg:t.msg,val:t.val,date:ds,slot:sl,created:+n,ack:0,done:0});ch=true;notify(t.name,t.msg)}})});
+ S.pre=S.pre||[];[0,1].forEach(k=>{const d=new Date(n.getFullYear(),n.getMonth(),n.getDate()+k);S.tasks.forEach(t=>{const pm=t.pre??S.cfg.preMin;if(!pm||!dueOn(t,d))return;t.times.forEach(sl=>{const[h,m]=sl.split(":").map(Number),at=new Date(d.getFullYear(),d.getMonth(),d.getDate(),h,m),lead=at-n,key=t.id+"|"+iso(d)+"|"+sl;if(lead>0&&lead<=pm*60000&&!S.pre.find(p=>p.key==key)){S.pre.push({key,name:t.name,msg:t.msg,at:+at,dis:0});ch=true;notify("⏰ تذكير مسبق: "+t.name,"بعد "+Math.ceil(lead/60000)+" دقيقة – "+t.msg);if(sound)beep(2)}})})});
+ S.pre=S.pre.filter(p=>n-p.at<864e5);if(ch)save();preRender();
+ $("clock").textContent=n.toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"});
+ const open=S.inst.filter(i=>!i.done),un=open.filter(i=>!i.ack);
+ if(sound&&un.length&&Date.now()-lastBeep>15000){lastBeep=Date.now();beep(un.some(i=>st(i)[1]=="bad")?3:1)}
+ document.title=un.length&&(flash=!flash)?"🔴 ("+un.length+") تنبيه جديد":"منبّه عمليات المحطة";
+ const s2=open.map(i=>i.id+st(i)[0]).join()+tab;if(s2!==sig){sig=s2;if(tab=="act")render()}}
+function ack(id){const i=S.inst.find(x=>x.id==id);if(!S.cfg.op.trim()){$("e_"+id).textContent="اكتب اسمك في الخانة أعلى الصفحة أولاً.";return}
+ i.ack=Date.now();i.ackBy=S.cfg.op.trim();save();sig="";tick()}
+function fin(id){const i=S.inst.find(x=>x.id==id),v=$("v_"+id)?.value.trim();if(i.val&&!v){$("e_"+id).textContent="سجّل القراءة قبل تأكيد التنفيذ.";return}
+ i.done=Date.now();i.doneBy=S.cfg.op.trim()||i.ackBy;i.value=v||"";i.note=$("n_"+id).value.trim();save();sig="";tick()}
+function test(){const t=S.tasks[0];if(!t)return;S.inst.unshift({id:uid(),tid:t.id,name:"(تجربة) "+t.name,msg:t.msg,val:t.val,date:"test",slot:"T"+Date.now(),created:Date.now(),ack:0,done:0});save();sig="";tick();notify("تجربة",t.msg)}
+function actView(){const o=S.inst.filter(i=>!i.done);
+ if(!o.length)return `<div class="card empty">✔ لا توجد مهام معلّقة الآن<br><button class="btn g" onclick="test()">إرسال تنبيه تجريبي</button><button class="btn g" onclick="testPre()">تجربة تذكير مسبق</button></div>`;
+ return o.map(i=>{const[s,c]=st(i);return `<div class="card ${c}"><h2>${esc(i.name)}<span class="badge ${c}">${s}</span></h2><div class="msg">${esc(i.msg)}</div>
+ <div class="steps"><span>① وصلت الرسالة: ${fm(i.created)}</span><span>② استلام: ${i.ack?fm(i.ack)+" – "+esc(i.ackBy):"—"}</span><span>③ تنفيذ: —</span></div>
+ ${i.ack?`<div class="fl">${i.val?`<input id="v_${i.id}" placeholder="القراءة (مثلاً ppm)" inputmode="decimal" style="width:150px">`:""}<input id="n_${i.id}" placeholder="ملاحظات (اختياري)" style="flex:1;min-width:160px"><button class="btn ok" onclick="fin('${i.id}')">🏁 تم التنفيذ</button></div>`:`<button class="btn" onclick="ack('${i.id}')">✅ استلمت الرسالة</button>`}
+ <div class="err" id="e_${i.id}"></div></div>`}).join("")}
+function logView(){const r=S.inst.slice(0,100);return `<div class="card"><div class="sc"><table><tr><th>التاريخ</th><th>المهمة</th><th>وصول</th><th>استلام</th><th>تنفيذ</th><th>قراءة</th><th>الحالة</th></tr>`+r.map(i=>`<tr><td>${i.date}</td><td>${esc(i.name)}</td><td>${fm(i.created)}</td><td>${fm(i.ack)} ${esc(i.ackBy||"")}</td><td>${fm(i.done)} ${esc(i.doneBy||"")}</td><td>${esc(i.value||"")}</td><td class="${st(i)[1]}">${st(i)[0]}</td></tr>`).join("")+`</table></div><button class="btn g" onclick="cp()">نسخ التقرير</button><button class="btn r" onclick="if(confirm('مسح السجل؟')){S.inst=[];save();render()}">مسح السجل</button></div>`}
+function cp(){const t=S.inst.slice(0,100).map(i=>[i.date,i.name,fm(i.created),fm(i.ack)+" "+(i.ackBy||""),fm(i.done)+" "+(i.doneBy||""),i.value||"",st(i)[0]].join(" | ")).join("\n");try{navigator.clipboard.writeText(t)}catch(e){}}
+function setT(id,k,v){const t=S.tasks.find(x=>x.id==id);if(k=="times")v=v.split(/[,،\s]+/).filter(x=>/^\d{1,2}:\d{2}$/.test(x)).map(x=>x.padStart(5,"0"));t[k]=v;save()}
+function setD(id,d,on){const t=S.tasks.find(x=>x.id==id);t.days=t.days.filter(x=>x!=d);if(on)t.days.push(d);save()}
+function addT(){S.tasks.push({id:uid(),name:"مهمة جديدة",times:["09:00"],days:[0,1,2,3,4,5,6],val:false,msg:"",unit:"week",every:1,start:iso(new Date()),dom:new Date().getDate()});save();render()}
+function delT(id){if(confirm("حذف المهمة؟")){S.tasks=S.tasks.filter(x=>x.id!=id);save();render()}}
+function setView(){return S.tasks.map(t=>`<div class="card"><div class="fl"><input value="${esc(t.name)}" oninput="setT('${t.id}','name',this.value)" style="flex:1;min-width:180px;font-weight:700"><button class="btn r" onclick="delT('${t.id}')">حذف</button></div>
+ <div class="fl"><label>المواعيد (24 ساعة، بينها فاصلة):</label><input dir="ltr" value="${t.times.join(", ")}" onchange="setT('${t.id}','times',this.value)" style="width:220px"></div>
+ <div class="fl"><label>التكرار: كل</label><input type="number" min="1" value="${t.every}" style="width:70px" onchange="setT('${t.id}','every',Math.max(1,+this.value||1));render()"><select onchange="setT('${t.id}','unit',this.value);render()">${[["day","يوم"],["week","أسبوع"],["month","شهر"]].map(u=>`<option value="${u[0]}" ${t.unit==u[0]?"selected":""}>${u[1]}</option>`).join("")}</select><label>ويبدأ العد من</label><input type="date" value="${t.start}" onchange="setT('${t.id}','start',this.value||iso(new Date()));render()"></div>
+ ${t.unit=="week"?`<div class="fl days">${D.map((d,k)=>`<label><input type="checkbox" ${t.days.includes(k)?"checked":""} onchange="setD('${t.id}',${k},this.checked);render()">${d}</label>`).join("")}</div>`:""}
+ ${t.unit=="month"?`<div class="fl"><label>يوم الشهر:</label><input type="number" min="1" max="31" value="${t.dom}" style="width:70px" onchange="setT('${t.id}','dom',Math.min(31,Math.max(1,+this.value||1)));render()"><span class="sub">(لو الشهر أقصر، بتتنفذ آخر يوم فيه)</span></div>`:""}
+ <div class="fl"><label>تذكير مسبق قبل الموعد بـ (دقيقة، 0 = بدون):</label><input type="number" min="0" value="${t.pre??S.cfg.preMin}" style="width:80px" onchange="setT('${t.id}','pre',Math.max(0,+this.value||0))"></div>
+ <div class="sub">الموعد القادم: <b>${nextDue(t)}</b></div>
+ <div class="fl"><label><input type="checkbox" ${t.val?"checked":""} onchange="setT('${t.id}','val',this.checked)"> يتطلب تسجيل قراءة عند التنفيذ</label></div>
+ <textarea rows="2" style="width:100%" oninput="setT('${t.id}','msg',this.value)">${esc(t.msg)}</textarea></div>`).join("")+
+ `<button class="btn" onclick="addT()">+ مهمة جديدة</button><div class="card"><h2>الإعدادات</h2><div class="fl"><label>التذكير المسبق الافتراضي قبل الموعد بـ (دقيقة، 0 = بدون):</label><input type="number" min="0" value="${S.cfg.preMin}" style="width:80px" onchange="S.cfg.preMin=Math.max(0,+this.value||0);save()"></div><div class="fl"><label>تنبيه تصعيد لو لم يُستلم خلال (دقيقة):</label><input type="number" value="${S.cfg.ackMin}" style="width:80px" onchange="S.cfg.ackMin=+this.value||10;save()"></div>
+ <div class="fl"><label>تنبيه تأخير لو لم يُنفّذ بعد الاستلام خلال (دقيقة):</label><input type="number" value="${S.cfg.doneMin}" style="width:80px" onchange="S.cfg.doneMin=+this.value||30;save()"></div>
+ <div class="fl"><label>أسماء المشغّلين (بينها فاصلة):</label><input value="${esc(S.cfg.ops.join(", "))}" style="flex:1" onchange="S.cfg.ops=this.value.split(/[,،]+/).map(x=>x.trim()).filter(Boolean);save();ops()"></div></div>`}
+const T=[["act","المهام الحالية"],["log","السجل"],["set","الجدول والإعدادات"]];
+function render(){$("tabs").innerHTML=T.map(t=>`<button class="${t[0]==tab?"on":""}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join("");$("view").innerHTML=({act:actView,log:logView,set:setView})[tab]()}
+function ops(){$("ops").innerHTML=S.cfg.ops.map(o=>`<option value="${esc(o)}">`).join("")}
+$("op").value=S.cfg.op;ops();render();tick();setInterval(tick,15000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){if(sound)wl();tick()}});
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
