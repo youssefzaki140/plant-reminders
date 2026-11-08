@@ -56,7 +56,7 @@ const DEF={tasks:[
 {id:"t3",name:"تحضير الكيماويات",times:["05:30"],days:[0,1,2,3,4,5,6],val:false,msg:"حضّر محاليل الكيماويات المطلوبة لـ CEB والتعقيم."},
 {id:"t4",name:"التعقيم الساخن لـ PW Loop",times:["22:00"],days:[0],val:false,msg:"ابدأ دورة التعقيم الساخن وتأكد من الحرارة والزمن على الـ HMI."}
 ],inst:[],cfg:{ackMin:10,doneMin:30,op:"",ops:[]}};
-let S=load(),tab="act",sound=false,ac=null,lastBeep=0,sig="",flash=0;
+let S=load(),tab="today",sound=false,ac=null,lastBeep=0,sig="",flash=0;
 function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function load(){let x=null;try{x=JSON.parse(localStorage.getItem(K))}catch(e){}if(!(x&&x.tasks))x=JSON.parse(JSON.stringify(DEF));x.cfg.preMin=x.cfg.preMin??15;x.tasks.forEach(t=>{t.unit=t.unit||"week";t.every=t.every||1;t.start=t.start||iso(new Date());t.dom=t.dom||new Date(t.start+"T00:00").getDate()});return x}
 function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
@@ -89,7 +89,7 @@ function tick(){const n=new Date(),ds=ymd(n);let ch=false;
  const open=S.inst.filter(i=>!i.done),un=open.filter(i=>!i.ack);
  if(sound&&un.length&&Date.now()-lastBeep>15000){lastBeep=Date.now();beep(un.some(i=>st(i)[1]=="bad")?3:1)}
  document.title=un.length&&(flash=!flash)?"🔴 ("+un.length+") تنبيه جديد":"منبّه عمليات المحطة";
- const s2=open.map(i=>i.id+st(i)[0]).join()+tab;if(s2!==sig){sig=s2;if(tab=="act")render()}}
+ const s2=open.map(i=>i.id+st(i)[0]).join()+tab+(tab=="today"?new Date().getMinutes():"");if(s2!==sig){sig=s2;if(tab=="act"||tab=="today")render()}}
 function ack(id){const i=S.inst.find(x=>x.id==id);if(!S.cfg.op.trim()){$("e_"+id).textContent="اكتب اسمك في الخانة أعلى الصفحة أولاً.";return}
  i.ack=Date.now();i.ackBy=S.cfg.op.trim();save();sig="";tick()}
 function fin(id){const i=S.inst.find(x=>x.id==id),v=$("v_"+id)?.value.trim();if(i.val&&!v){$("e_"+id).textContent="سجّل القراءة قبل تأكيد التنفيذ.";return}
@@ -101,7 +101,20 @@ function actView(){const o=S.inst.filter(i=>!i.done);
  <div class="steps"><span>① وصلت الرسالة: ${fm(i.created)}</span><span>② استلام: ${i.ack?fm(i.ack)+" – "+esc(i.ackBy):"—"}</span><span>③ تنفيذ: —</span></div>
  ${i.ack?`<div class="fl">${i.val?`<input id="v_${i.id}" placeholder="القراءة (مثلاً ppm)" inputmode="decimal" style="width:150px">`:""}<input id="n_${i.id}" placeholder="ملاحظات (اختياري)" style="flex:1;min-width:160px"><button class="btn ok" onclick="fin('${i.id}')">🏁 تم التنفيذ</button></div>`:`<button class="btn" onclick="ack('${i.id}')">✅ استلمت الرسالة</button>`}
  <div class="err" id="e_${i.id}"></div></div>`}).join("")}
-function logView(){const r=S.inst.slice(0,100);return `<div class="card"><div class="sc"><table><tr><th>التاريخ</th><th>المهمة</th><th>وصول</th><th>استلام</th><th>تنفيذ</th><th>قراءة</th><th>الحالة</th></tr>`+r.map(i=>`<tr><td>${i.date}</td><td>${esc(i.name)}</td><td>${fm(i.created)}</td><td>${fm(i.ack)} ${esc(i.ackBy||"")}</td><td>${fm(i.done)} ${esc(i.doneBy||"")}</td><td>${esc(i.value||"")}</td><td class="${st(i)[1]}">${st(i)[0]}</td></tr>`).join("")+`</table></div><button class="btn g" onclick="cp()">نسخ التقرير</button><button class="btn r" onclick="if(confirm('مسح السجل؟')){S.inst=[];save();render()}">مسح السجل</button></div>`}
+const LK={date:i=>i.created,name:i=>i.name,created:i=>i.created,ack:i=>i.ack||0,done:i=>i.done||0,value:i=>{const f=parseFloat(i.value);return isNaN(f)?(i.value||""):f},status:i=>st(i)[0]};
+let ls={k:"date",d:-1};
+function sortLog(k){ls=ls.k==k?{k,d:-ls.d}:{k,d:k=="date"?-1:1};render()}
+function cmpV(a,b){const x=typeof a=="number",y=typeof b=="number";if(x&&y)return a-b;if(x)return-1;if(y)return 1;return String(a).localeCompare(String(b),"ar")}
+function todayView(){const n=new Date(),ds=ymd(n),rows=[];
+ S.tasks.forEach(t=>{if(!dueOn(t,n))return;slotsOf(t,n).forEach(sl=>{const[h,m]=sl.split(":").map(Number),at=new Date(n.getFullYear(),n.getMonth(),n.getDate(),h,m),i=S.inst.find(x=>x.tid==t.id&&x.date==ds&&x.slot==sl);rows.push({t,sl,at,i})})});
+ rows.sort((a,b)=>a.at-b.at);const dn=rows.filter(r=>r.i&&r.i.done).length;
+ let h=`<div class="card"><h2>${n.toLocaleDateString("ar-EG",{weekday:"long",day:"numeric",month:"long"})}</h2><div class="msg">تمت ${dn} من ${rows.length} مهمة</div><div style="height:8px;background:var(--line);border-radius:6px"><div style="height:8px;width:${rows.length?dn/rows.length*100:0}%;background:var(--ok);border-radius:6px"></div></div></div>`;
+ if(!rows.length)return h+`<div class="card empty">لا توجد مهام مجدولة اليوم</div>`;
+ return h+rows.map(r=>{let s,c,x="";if(r.i){[s,c]=st(r.i);if(r.i.done)x=`${esc(r.i.doneBy)} ${fm(r.i.done)}${r.i.value?" • القراءة: "+esc(r.i.value):""}`;else if(r.i.ack)x=`استلمها ${esc(r.i.ackBy)} ${fm(r.i.ack)}`}
+ else if(r.at>n){const mn=Math.round((r.at-n)/6e4);s="قادم";c="new";x=`بعد ${mn>=60?Math.floor(mn/60)+" س ":""}${mn%60} د`}
+ else if(n-r.at<30000){s="الآن";c="new"}else{s="فائتة";c="bad";x="لم يصل تنبيهها"}
+ return `<div class="card ${c}"><h2><span dir="ltr" style="color:var(--acc)">${r.sl}</span> ${esc(r.t.name)}<span class="badge ${c}">${s}</span></h2><div class="msg">${esc(r.t.msg)}</div>${x?`<div class="steps"><span>${x}</span></div>`:""}${r.i&&!r.i.done?`<button class="btn" onclick="tab='act';render()">فتح التنبيه</button>`:""}</div>`}).join("")}
+function logView(){const r=S.inst.slice().sort((a,b)=>ls.d*cmpV(LK[ls.k](a),LK[ls.k](b))).slice(0,200);const th=(k,n)=>`<th style="cursor:pointer;user-select:none" onclick="sortLog('${k}')">${n}${ls.k==k?(ls.d>0?" ▲":" ▼"):""}</th>`;return `<div class="card"><div class="sc"><table><tr>${th("date","التاريخ")}${th("name","المهمة")}${th("created","وصول")}${th("ack","استلام")}${th("done","تنفيذ")}${th("value","قراءة")}${th("status","الحالة")}</tr>`+r.map(i=>`<tr><td>${i.date}</td><td>${esc(i.name)}</td><td>${fm(i.created)}</td><td>${fm(i.ack)} ${esc(i.ackBy||"")}</td><td>${fm(i.done)} ${esc(i.doneBy||"")}</td><td>${esc(i.value||"")}</td><td class="${st(i)[1]}">${st(i)[0]}</td></tr>`).join("")+`</table></div><button class="btn g" onclick="cp()">نسخ التقرير</button><button class="btn r" onclick="if(confirm('مسح السجل؟')){S.inst=[];save();render()}">مسح السجل</button></div>`}
 function cp(){const t=S.inst.slice(0,100).map(i=>[i.date,i.name,fm(i.created),fm(i.ack)+" "+(i.ackBy||""),fm(i.done)+" "+(i.doneBy||""),i.value||"",st(i)[0]].join(" | ")).join("\n");try{navigator.clipboard.writeText(t)}catch(e){}}
 const PRE=[["hour",1,"ساعة"],["hour",2,"ساعتين"],["hour",3,"3 ساعات"],["hour",12,"12 ساعة"],["day",1,"يوم"],["week",1,"أسبوع"],["month",1,"شهر"],["month",3,"3 شهور"],["month",6,"6 شهور"],["month",12,"سنة"]];
 function setRec(id,v){const t=S.tasks.find(x=>x.id==id);if(v=="c")t.cust=true;else{const p=PRE[+v];t.unit=p[0];t.every=p[1];t.cust=false}save();render()}
@@ -121,8 +134,8 @@ function setView(){return S.tasks.map(t=>`<div class="card"><div class="fl"><inp
  `<button class="btn" onclick="addT()">+ مهمة جديدة</button><div class="card"><h2>الإعدادات</h2><div class="fl"><label>التذكير المسبق الافتراضي قبل الموعد بـ (دقيقة، 0 = بدون):</label><input type="number" min="0" value="${S.cfg.preMin}" style="width:80px" onchange="S.cfg.preMin=Math.max(0,+this.value||0);save()"></div><div class="fl"><label>تنبيه تصعيد لو لم يُستلم خلال (دقيقة):</label><input type="number" value="${S.cfg.ackMin}" style="width:80px" onchange="S.cfg.ackMin=+this.value||10;save()"></div>
  <div class="fl"><label>تنبيه تأخير لو لم يُنفّذ بعد الاستلام خلال (دقيقة):</label><input type="number" value="${S.cfg.doneMin}" style="width:80px" onchange="S.cfg.doneMin=+this.value||30;save()"></div>
  <div class="fl"><label>أسماء المشغّلين (بينها فاصلة):</label><input value="${esc(S.cfg.ops.join(", "))}" style="flex:1" onchange="S.cfg.ops=this.value.split(/[,،]+/).map(x=>x.trim()).filter(Boolean);save();ops()"></div></div>`}
-const T=[["act","المهام الحالية"],["log","السجل"],["set","الجدول والإعدادات"]];
-function render(){$("tabs").innerHTML=T.map(t=>`<button class="${t[0]==tab?"on":""}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join("");$("view").innerHTML=({act:actView,log:logView,set:setView})[tab]()}
+const T=[["today","اليوم"],["act","الحالية"],["log","السجل"],["set","الجدول"]];
+function render(){$("tabs").innerHTML=T.map(t=>`<button class="${t[0]==tab?"on":""}" onclick="tab='${t[0]}';render()">${t[1]}${t[0]=="act"&&S.inst.some(i=>!i.done)?" ("+S.inst.filter(i=>!i.done).length+")":""}</button>`).join("");$("view").innerHTML=({today:todayView,act:actView,log:logView,set:setView})[tab]()}
 function ops(){$("ops").innerHTML=S.cfg.ops.map(o=>`<option value="${esc(o)}">`).join("")}
 $("op").value=S.cfg.op;ops();render();tick();setInterval(tick,15000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){if(sound)wl();tick()}});
